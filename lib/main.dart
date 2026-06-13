@@ -43,6 +43,7 @@ import 'package:finamp/services/finamp_user_helper.dart';
 import 'package:finamp/services/jellyfin_api_helper.dart';
 import 'package:finamp/services/keep_screen_on_helper.dart';
 import 'package:finamp/services/documents_path.dart';
+import 'package:finamp/services/local_audio_proxy.dart';
 import 'package:finamp/services/pre_login_certificate.dart';
 import 'package:finamp/services/network_manager.dart';
 import 'package:finamp/services/offline_listen_helper.dart';
@@ -443,6 +444,7 @@ Future<void> _setupPlaybackServices() async {
   );
 
   GetIt.instance.registerSingleton<MusicPlayerBackgroundTask>(audioHandler);
+  GetIt.instance.registerSingleton<LocalAudioProxy>(audioHandler.audioProxy);
   var queueService = QueueService();
   GetIt.instance.registerSingleton(queueService);
   audioHandler.onQueueServiceAvailable(); // breaking circular dependency

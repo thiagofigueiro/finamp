@@ -7,17 +7,26 @@ import 'jellyfin_api.dart' as jellyfin_api;
 
 class LocalAudioProxy {
   HttpServer? _server;
+  HttpClient? _cachedClient;
+  SecurityContext? _cachedSecCtx;
   final _logger = Logger("LocalAudioProxy");
   int _requestCounter = 0;
 
   int get port => _server?.port ?? 0;
   bool get isRunning => _server != null;
 
+  /// Rewrites an arbitrary URL through this proxy so the request uses mTLS.
+  /// Returns null if the proxy isn't running.
+  String? urlForProxy(String url) {
+    if (!isRunning) return null;
+    return "http://127.0.0.1:$port/proxy?url=${Uri.encodeFull(url)}";
+  }
+
   Future<void> start() async {
     if (_server != null) return;
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _logger.info("Started on port $port");
-    _server!.listen(_handleRequest, onError: (e) {
+    _server!.listen(_handleRequest, onError: (Object e) {
       _logger.severe("Server error: $e");
     });
   }
@@ -25,6 +34,18 @@ class LocalAudioProxy {
   Future<void> stop() async {
     await _server?.close(force: true);
     _server = null;
+    _cachedClient?.close();
+    _cachedClient = null;
+    _cachedSecCtx = null;
+  }
+
+  HttpClient _getClient() {
+    if (_cachedClient != null) return _cachedClient!;
+    _cachedSecCtx = jellyfin_api.createClientCertSecurityContext();
+    _cachedClient = HttpClient(context: _cachedSecCtx);
+    _cachedClient!.connectionTimeout = const Duration(seconds: 10);
+    _logger.info("Created cached HttpClient");
+    return _cachedClient!;
   }
 
   void _handleRequest(HttpRequest request) async {
@@ -39,12 +60,8 @@ class LocalAudioProxy {
 
     _logger.fine("[$id] Proxying: $originalUrl");
 
-    HttpClient? client;
     try {
-      final secCtx = jellyfin_api.createClientCertSecurityContext();
-      client = HttpClient(context: secCtx);
-      client.connectionTimeout = const Duration(seconds: 10);
-
+      final client = _getClient();
       final proxyRequest = await client.getUrl(Uri.parse(originalUrl));
 
       request.headers.forEach((name, values) {
@@ -64,7 +81,9 @@ class LocalAudioProxy {
         }
       });
 
-      await proxyResponse.pipe(request.response);
+      final pipeDone = proxyResponse.pipe(request.response);
+      final clientGone = request.response.done;
+      await Future.any([pipeDone, clientGone]);
       _logger.fine("[$id] Done (${proxyResponse.statusCode})");
     } catch (e) {
       _logger.warning("[$id] Failed: $e");
@@ -73,8 +92,6 @@ class LocalAudioProxy {
         request.response.write('Proxy error: $e');
         await request.response.close();
       } catch (_) {}
-    } finally {
-      client?.close();
     }
   }
 }

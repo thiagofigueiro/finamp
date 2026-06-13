@@ -139,6 +139,8 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler with SeekHandler, Queue
   late final AndroidLoudnessEnhancer? _loudnessEnhancerEffect;
   final LocalAudioProxy _audioProxy = LocalAudioProxy();
 
+  LocalAudioProxy get audioProxy => _audioProxy;
+
   final _audioServiceBackgroundTaskLogger = Logger("MusicPlayerBackgroundTask");
   final _volumeNormalizationLogger = Logger("VolumeNormalization");
   final _outputLogger = Logger("Output");

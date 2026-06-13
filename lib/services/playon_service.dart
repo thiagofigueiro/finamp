@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:finamp/components/global_snackbar.dart';
 import 'package:finamp/models/finamp_models.dart';
@@ -10,12 +11,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_it/get_it.dart';
 import 'package:logging/logging.dart';
+import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../services/finamp_settings_helper.dart';
 import '../../services/jellyfin_api_helper.dart';
 import '../../services/music_player_background_task.dart';
 import 'finamp_user_helper.dart';
+import 'jellyfin_api.dart' as jellyfin_api;
+import 'pre_login_certificate.dart';
 
 final _playOnServiceLogger = Logger("PlayOnService");
 final _finampUserHelper = GetIt.instance<FinampUserHelper>();
@@ -210,7 +214,12 @@ class PlayOnService {
         "${_finampUserHelper.currentUser!.baseURL}/socket?api_key=${_finampUserHelper.currentUser!.accessToken}";
     final parsedUrl = Uri.parse(url);
     final wsUrl = parsedUrl.replace(scheme: parsedUrl.scheme == "https" ? "wss" : "ws");
-    _channel = WebSocketChannel.connect(wsUrl);
+    final secCtx = jellyfin_api.createClientCertSecurityContext()
+        ?? PreLoginCertificate.createSecurityContext();
+    _channel = IOWebSocketChannel.connect(
+      wsUrl,
+      customClient: secCtx != null ? HttpClient(context: secCtx) : null,
+    );
 
     await _channel.ready;
     _playOnServiceLogger.info("WebSocket connection to server established");

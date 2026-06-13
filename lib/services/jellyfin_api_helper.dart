@@ -24,6 +24,7 @@ import 'downloads_service_backend.dart';
 import 'finamp_settings_helper.dart';
 import 'finamp_user_helper.dart';
 import 'jellyfin_api.dart' as jellyfin_api;
+import 'local_audio_proxy.dart';
 import 'pre_login_certificate.dart';
 
 class JellyfinApiHelper {
@@ -1192,7 +1193,7 @@ class JellyfinApiHelper {
       if (maxWidth != null) "MaxWidth": maxWidth.toString(),
       if (maxHeight != null) "MaxHeight": maxHeight.toString(),
     };
-    return Uri(
+    final uri = Uri(
       host: parsedBaseUrl.host,
       port: parsedBaseUrl.port,
       scheme: parsedBaseUrl.scheme,
@@ -1201,6 +1202,11 @@ class JellyfinApiHelper {
       // don't pass an empty map, otherwise .toString() will append just the `?` at the end, which is unusual
       queryParameters: queryParams.isNotEmpty ? queryParams : null,
     );
+
+    final proxy = GetIt.instance<LocalAudioProxy>();
+    final proxyUrl = proxy.urlForProxy(uri.toString());
+    if (proxyUrl != null) return Uri.parse(proxyUrl);
+    return uri;
   }
 
   Uri? getUserImageUrl({
@@ -1217,7 +1223,7 @@ class JellyfinApiHelper {
 
     List<String> builtPath = List<String>.from(baseUrl.pathSegments);
     builtPath.addAll(["Users", user.id, "Images", "Primary"]);
-    return Uri(
+    final uri = Uri(
       host: baseUrl.host,
       port: baseUrl.port,
       scheme: baseUrl.scheme,
@@ -1230,6 +1236,11 @@ class JellyfinApiHelper {
         if (maxHeight != null) "MaxHeight": maxHeight.toString(),
       },
     );
+
+    final proxy = GetIt.instance<LocalAudioProxy>();
+    final proxyUrl = proxy.urlForProxy(uri.toString());
+    if (proxyUrl != null) return Uri.parse(proxyUrl);
+    return uri;
   }
 
   /// Returns the correct URL for the given item.

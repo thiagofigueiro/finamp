@@ -22,6 +22,7 @@ import '../screens/downloads_screen.dart';
 import 'finamp_settings_helper.dart';
 import 'finamp_user_helper.dart';
 import 'jellyfin_api_helper.dart';
+import 'local_audio_proxy.dart';
 
 part 'downloads_service_backend.g.dart';
 
@@ -349,6 +350,7 @@ class IsarTaskQueue implements TaskQueue {
                       .toString(),
                 _ => throw StateError("Invalid enqueue ${task.name} which is a ${task.type}"),
               };
+              url = _rewriteForProxy(url);
               _enqueueLog.fine("Submitting download ${task.name} to background_downloader.");
               var downloadTask = DownloadTask(
                 taskId: task.isarId.toString(),
@@ -1706,4 +1708,12 @@ class DownloadsSyncService {
       }
     });
   }
+}
+
+/// Rewrites a download URL through the local mTLS proxy so the native
+/// URLSession used by background_downloader presents the client certificate.
+String _rewriteForProxy(String url) {
+  final proxy = GetIt.instance<LocalAudioProxy>();
+  if (!proxy.isRunning) return url;
+  return "http://127.0.0.1:${proxy.port}/proxy?url=${Uri.encodeFull(url)}";
 }
