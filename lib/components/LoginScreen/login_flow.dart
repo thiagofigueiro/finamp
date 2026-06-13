@@ -199,6 +199,7 @@ class ServerState {
   String? baseUrl;
   Timer? connectionTestDebounceTimer;
   String? baseUrlToTest;
+  String? connectionError;
   JellyfinServerClientDiscovery clientDiscoveryHandler;
   VoidCallback? updateCallback;
 
@@ -211,6 +212,7 @@ class ServerState {
   }) : clientDiscoveryHandler = JellyfinServerClientDiscovery();
 
   void onBaseUrlChanged(String baseUrl) {
+    connectionError = null;
     if (connectionTestDebounceTimer?.isActive ?? false) {
       connectionTestDebounceTimer?.cancel();
     }
@@ -223,83 +225,92 @@ class ServerState {
         baseUrlToTest = null;
         updateCallback?.call();
       } catch (err) {
-        // nop, make sure *not* to reset the baseUrlToTest
+        connectionError = err.toString();
+        updateCallback?.call();
+        // keep baseUrlToTest set so the error is visible
       }
     });
   }
 
   Future<void> testServerConnection(String baseUrl) async {
-    if (baseUrl.isNotEmpty) {
-      bool unspecifiedProtocol = false;
-      bool unspecifiedPort = false;
+    if (baseUrl.isEmpty) return;
 
-      String baseUrlToTest = baseUrl;
+    bool unspecifiedProtocol = false;
+    bool unspecifiedPort = false;
 
-      // We trim the base url in case the user accidentally added some trailing whitespace
-      baseUrlToTest = baseUrlToTest.trim();
+    String baseUrlToTest = baseUrl;
 
-      if (!(baseUrlToTest.startsWith("http://") || baseUrlToTest.startsWith("https://"))) {
-        // use https by default
-        baseUrlToTest = "https://$baseUrlToTest";
-        unspecifiedProtocol = true;
-      }
+    // We trim the base url in case the user accidentally added some trailing whitespace
+    baseUrlToTest = baseUrlToTest.trim();
 
-      // use regex to check if a port is specified
-      final portRegex = RegExp(r"[^\/]:\d+");
-      if (!portRegex.hasMatch(baseUrlToTest)) {
-        unspecifiedPort = true;
-      }
+    if (!(baseUrlToTest.startsWith("http://") || baseUrlToTest.startsWith("https://"))) {
+      // use https by default
+      baseUrlToTest = "https://$baseUrlToTest";
+      unspecifiedProtocol = true;
+    }
 
-      if (baseUrlToTest.endsWith("/")) {
-        baseUrlToTest = baseUrlToTest.substring(0, baseUrlToTest.length - 1);
-      }
+    // use regex to check if a port is specified
+    final portRegex = RegExp(r"[^\/]:\d+");
+    if (!portRegex.hasMatch(baseUrlToTest)) {
+      unspecifiedPort = true;
+    }
 
-      jellyfinApiHelper.baseUrlTemp = Uri.parse(baseUrlToTest);
+    if (baseUrlToTest.endsWith("/")) {
+      baseUrlToTest = baseUrlToTest.substring(0, baseUrlToTest.length - 1);
+    }
 
-      PublicSystemInfoResult? publicServerInfo;
+    jellyfinApiHelper.baseUrlTemp = Uri.parse(baseUrlToTest);
+
+    PublicSystemInfoResult? publicServerInfo;
+    String? lastError;
+    try {
+      publicServerInfo = await jellyfinApiHelper.loadServerPublicInfo();
+    } catch (error) {
+      lastError = error.toString();
+      serverStateLogger.severe("Error loading server info: $error");
+    }
+    if (this.baseUrlToTest != baseUrl) {
+      throw Exception("Server URL changed while testing");
+    }
+
+    if (publicServerInfo == null && unspecifiedProtocol) {
+      // try http
+      Uri url = Uri.parse(baseUrlToTest).replace(scheme: "http");
+      baseUrlToTest = url.toString();
+      jellyfinApiHelper.baseUrlTemp = url;
       try {
         publicServerInfo = await jellyfinApiHelper.loadServerPublicInfo();
       } catch (error) {
+        lastError = error.toString();
         serverStateLogger.severe("Error loading server info: $error");
       }
-      if (this.baseUrlToTest != baseUrl) {
-        throw Exception("Server URL changed while testing");
-      }
+    }
+    if (this.baseUrlToTest != baseUrl) {
+      throw Exception("Server URL changed while testing");
+    }
 
-      if (publicServerInfo == null && unspecifiedProtocol) {
-        // try http
-        Uri url = Uri.parse(baseUrlToTest).replace(scheme: "http");
-        baseUrlToTest = url.toString(); // update the local url
-        jellyfinApiHelper.baseUrlTemp = url;
-        try {
-          publicServerInfo = await jellyfinApiHelper.loadServerPublicInfo();
-        } catch (error) {
-          serverStateLogger.severe("Error loading server info: $error");
-        }
+    if (publicServerInfo == null && unspecifiedPort) {
+      // try default port 8096
+      Uri url = Uri.parse(baseUrlToTest).replace(port: 8096);
+      baseUrlToTest = url.toString();
+      jellyfinApiHelper.baseUrlTemp = url;
+      try {
+        publicServerInfo = await jellyfinApiHelper.loadServerPublicInfo();
+      } catch (error) {
+        lastError = error.toString();
+        serverStateLogger.severe("Error loading server info: $error");
       }
-      if (this.baseUrlToTest != baseUrl) {
-        throw Exception("Server URL changed while testing");
-      }
+    }
+    if (this.baseUrlToTest != baseUrl) {
+      throw Exception("Server URL changed while testing");
+    }
 
-      if (publicServerInfo == null && unspecifiedPort) {
-        // try default port 8096
-        Uri url = Uri.parse(baseUrlToTest).replace(port: 8096);
-        baseUrlToTest = url.toString(); // update the local url
-        jellyfinApiHelper.baseUrlTemp = url;
-        try {
-          publicServerInfo = await jellyfinApiHelper.loadServerPublicInfo();
-        } catch (error) {
-          serverStateLogger.severe("Error loading server info: $error");
-        }
-      }
-      if (this.baseUrlToTest != baseUrl) {
-        throw Exception("Server URL changed while testing");
-      }
-
-      if (publicServerInfo != null) {
-        manualServer = publicServerInfo;
-        this.baseUrl = baseUrlToTest;
-      }
+    if (publicServerInfo != null) {
+      manualServer = publicServerInfo;
+      this.baseUrl = baseUrlToTest;
+      connectionError = null;
+    } else {
+      connectionError = lastError ?? "Failed to connect to server";
     }
   }
 }

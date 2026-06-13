@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'dart:io' show HttpClient, Platform;
+import 'dart:io' show Directory, File, HttpClient, Platform, SecurityContext;
 
 import 'package:app_set_id/app_set_id.dart';
 import 'package:chopper/chopper.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:path/path.dart' as path_helper;
 import 'package:finamp/models/finamp_models.dart';
 import 'package:finamp/services/http_aggregate_logging_interceptor.dart';
 import 'package:flutter/foundation.dart';
@@ -13,8 +14,10 @@ import 'package:http/io_client.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../models/jellyfin_models.dart';
+import 'documents_path.dart';
 import 'finamp_user_helper.dart';
 import 'jellyfin_api_helper.dart';
+import 'pre_login_certificate.dart';
 
 part 'jellyfin_api.chopper.dart';
 
@@ -573,10 +576,10 @@ abstract class JellyfinApi extends ChopperService {
 
     final client = ChopperClient(
       client: http.IOClient(
-        HttpClient()
+        HttpClient(context: createClientCertSecurityContext() ?? PreLoginCertificate.createSecurityContext())
           ..connectionTimeout = const Duration(
             seconds: 10,
-          ), // if we don't get a response by then, it's probably not worth it to wait any longer. this prevents the server connection test from taking too long
+          ),
       ),
       // The first part of the URL is now here
       services: [
@@ -719,4 +722,53 @@ Future<DeviceInfo> getDeviceInfo() async {
     throw Exception("Unsupported platform");
   }
   return info;
+}
+
+/// Creates a [SecurityContext] configured with the current user's client
+/// certificate if one is available. Returns `null` if no certificate is
+/// configured, which means the caller should use the default context.
+SecurityContext? createClientCertSecurityContext() {
+  try {
+    final userHelper = GetIt.instance<FinampUserHelper>();
+    final user = userHelper.currentUser;
+    if (user?.clientCertificatePath != null && user?.clientCertificatePassword != null) {
+      var certPath = user!.clientCertificatePath!;
+
+      if (!File(certPath).existsSync()) {
+        // The stored path may be stale (container changed on iOS sim).
+        // Try to find the file in the current documents directory.
+        String? derivedPath;
+        if (cachedDocumentsPath != null) {
+          derivedPath = path_helper.join(cachedDocumentsPath!, "certificates", "${user.id}.p12");
+          if (!File(derivedPath).existsSync()) {
+            derivedPath = null;
+          }
+        }
+        if (derivedPath == null) {
+          // Fallback: try the stored path's parent directory.
+          final dir = Directory(certPath).parent;
+          final p = path_helper.join(dir.path, "${user.id}.p12");
+          if (File(p).existsSync()) {
+            derivedPath = p;
+          }
+        }
+        if (derivedPath != null) {
+          debugPrint("[createClientCertSecurityContext] stale path $certPath, using $derivedPath");
+          certPath = derivedPath;
+        } else {
+          debugPrint("[createClientCertSecurityContext] file missing at $certPath");
+          return null;
+        }
+      }
+
+      debugPrint("[createClientCertSecurityContext] path=$certPath pw=${user.clientCertificatePassword}");
+      return SecurityContext(withTrustedRoots: true)
+        ..useCertificateChain(certPath, password: user.clientCertificatePassword!)
+        ..usePrivateKey(certPath, password: user.clientCertificatePassword!);
+    }
+    debugPrint("[createClientCertSecurityContext] no cert: path=${user?.clientCertificatePath} pw=${user?.clientCertificatePassword}");
+  } catch (e) {
+    debugPrint("[createClientCertSecurityContext] error: $e");
+  }
+  return null;
 }

@@ -22,26 +22,29 @@ class FinampUserAdapter extends TypeAdapter<FinampUser> {
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
     return FinampUser(
-      id: fields[0] as String,
-      publicAddress: fields[1] as String,
-      localAddress: fields[7] == null
-          ? 'http://0.0.0.0:8096'
-          : fields[7] as String,
-      preferLocalNetwork: fields[9] == null ? false : fields[9] as bool,
-      isLocal: fields[8] == null ? false : fields[8] as bool,
-      accessToken: fields[2] as String,
-      serverId: fields[3] as String,
-      currentViewId: fields[4] as BaseItemId?,
-      views: fields[5] == null
-          ? const {}
-          : (fields[5] as Map).cast<BaseItemId, BaseItemDto>(),
-    );
+        id: fields[0] as String,
+        publicAddress: fields[1] as String,
+        localAddress: fields[7] == null
+            ? 'http://0.0.0.0:8096'
+            : fields[7] as String,
+        preferLocalNetwork: fields[9] == null ? false : fields[9] as bool,
+        isLocal: fields[8] == null ? false : fields[8] as bool,
+        accessToken: fields[2] as String,
+        serverId: fields[3] as String,
+        currentViewId: fields[4] as BaseItemId?,
+        views: fields[5] == null
+            ? const {}
+            : (fields[5] as Map).cast<BaseItemId, BaseItemDto>(),
+      )
+      ..clientCertificatePath = fields[10] as String?
+      ..clientCertificatePassword = fields[11] as String?
+      ..clientCertificateName = fields[12] as String?;
   }
 
   @override
   void write(BinaryWriter writer, FinampUser obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(12)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -59,7 +62,13 @@ class FinampUserAdapter extends TypeAdapter<FinampUser> {
       ..writeByte(8)
       ..write(obj.isLocal)
       ..writeByte(9)
-      ..write(obj.preferLocalNetwork);
+      ..write(obj.preferLocalNetwork)
+      ..writeByte(10)
+      ..write(obj.clientCertificatePath)
+      ..writeByte(11)
+      ..write(obj.clientCertificatePassword)
+      ..writeByte(12)
+      ..write(obj.clientCertificateName);
   }
 
   @override
@@ -3225,30 +3234,45 @@ const FinampUserSchema = CollectionSchema(
     ),
     r'baseURL': PropertySchema(id: 1, name: r'baseURL', type: IsarType.string),
     r'baseUrl': PropertySchema(id: 2, name: r'baseUrl', type: IsarType.string),
-    r'currentViewId': PropertySchema(
+    r'clientCertificateName': PropertySchema(
       id: 3,
+      name: r'clientCertificateName',
+      type: IsarType.string,
+    ),
+    r'clientCertificatePassword': PropertySchema(
+      id: 4,
+      name: r'clientCertificatePassword',
+      type: IsarType.string,
+    ),
+    r'clientCertificatePath': PropertySchema(
+      id: 5,
+      name: r'clientCertificatePath',
+      type: IsarType.string,
+    ),
+    r'currentViewId': PropertySchema(
+      id: 6,
       name: r'currentViewId',
       type: IsarType.string,
     ),
-    r'id': PropertySchema(id: 4, name: r'id', type: IsarType.string),
-    r'isLocal': PropertySchema(id: 5, name: r'isLocal', type: IsarType.bool),
+    r'id': PropertySchema(id: 7, name: r'id', type: IsarType.string),
+    r'isLocal': PropertySchema(id: 8, name: r'isLocal', type: IsarType.bool),
     r'isarViews': PropertySchema(
-      id: 6,
+      id: 9,
       name: r'isarViews',
       type: IsarType.string,
     ),
     r'localAddress': PropertySchema(
-      id: 7,
+      id: 10,
       name: r'localAddress',
       type: IsarType.string,
     ),
     r'preferLocalNetwork': PropertySchema(
-      id: 8,
+      id: 11,
       name: r'preferLocalNetwork',
       type: IsarType.bool,
     ),
     r'serverId': PropertySchema(
-      id: 9,
+      id: 12,
       name: r'serverId',
       type: IsarType.string,
     ),
@@ -3279,6 +3303,24 @@ int _finampUserEstimateSize(
   bytesCount += 3 + object.baseURL.length * 3;
   bytesCount += 3 + object.publicAddress.length * 3;
   {
+    final value = object.clientCertificateName;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.clientCertificatePassword;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.clientCertificatePath;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.isarCurrentViewId;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -3300,13 +3342,16 @@ void _finampUserSerialize(
   writer.writeString(offsets[0], object.accessToken);
   writer.writeString(offsets[1], object.baseURL);
   writer.writeString(offsets[2], object.publicAddress);
-  writer.writeString(offsets[3], object.isarCurrentViewId);
-  writer.writeString(offsets[4], object.id);
-  writer.writeBool(offsets[5], object.isLocal);
-  writer.writeString(offsets[6], object.isarViews);
-  writer.writeString(offsets[7], object.localAddress);
-  writer.writeBool(offsets[8], object.preferLocalNetwork);
-  writer.writeString(offsets[9], object.serverId);
+  writer.writeString(offsets[3], object.clientCertificateName);
+  writer.writeString(offsets[4], object.clientCertificatePassword);
+  writer.writeString(offsets[5], object.clientCertificatePath);
+  writer.writeString(offsets[6], object.isarCurrentViewId);
+  writer.writeString(offsets[7], object.id);
+  writer.writeBool(offsets[8], object.isLocal);
+  writer.writeString(offsets[9], object.isarViews);
+  writer.writeString(offsets[10], object.localAddress);
+  writer.writeBool(offsets[11], object.preferLocalNetwork);
+  writer.writeString(offsets[12], object.serverId);
 }
 
 FinampUser _finampUserDeserialize(
@@ -3318,14 +3363,17 @@ FinampUser _finampUserDeserialize(
   final object = FinampUser(
     accessToken: reader.readString(offsets[0]),
     publicAddress: reader.readString(offsets[2]),
-    id: reader.readString(offsets[4]),
-    isLocal: reader.readBool(offsets[5]),
-    localAddress: reader.readString(offsets[7]),
-    preferLocalNetwork: reader.readBool(offsets[8]),
-    serverId: reader.readString(offsets[9]),
+    id: reader.readString(offsets[7]),
+    isLocal: reader.readBool(offsets[8]),
+    localAddress: reader.readString(offsets[10]),
+    preferLocalNetwork: reader.readBool(offsets[11]),
+    serverId: reader.readString(offsets[12]),
   );
-  object.isarCurrentViewId = reader.readStringOrNull(offsets[3]);
-  object.isarViews = reader.readString(offsets[6]);
+  object.clientCertificateName = reader.readStringOrNull(offsets[3]);
+  object.clientCertificatePassword = reader.readStringOrNull(offsets[4]);
+  object.clientCertificatePath = reader.readStringOrNull(offsets[5]);
+  object.isarCurrentViewId = reader.readStringOrNull(offsets[6]);
+  object.isarViews = reader.readString(offsets[9]);
   return object;
 }
 
@@ -3345,16 +3393,22 @@ P _finampUserDeserializeProp<P>(
     case 3:
       return (reader.readStringOrNull(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 5:
-      return (reader.readBool(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 7:
       return (reader.readString(offset)) as P;
     case 8:
       return (reader.readBool(offset)) as P;
     case 9:
+      return (reader.readString(offset)) as P;
+    case 10:
+      return (reader.readString(offset)) as P;
+    case 11:
+      return (reader.readBool(offset)) as P;
+    case 12:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3885,6 +3939,501 @@ extension FinampUserQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(
         FilterCondition.greaterThan(property: r'baseUrl', value: ''),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'clientCertificateName'),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'clientCertificateName'),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameEqualTo(String? value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'clientCertificateName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'clientCertificateName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'clientCertificateName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'clientCertificateName',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameStartsWith(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'clientCertificateName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameEndsWith(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'clientCertificateName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'clientCertificateName',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'clientCertificateName',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'clientCertificateName', value: ''),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificateNameIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          property: r'clientCertificateName',
+          value: '',
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'clientCertificatePassword'),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'clientCertificatePassword'),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordEqualTo(String? value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'clientCertificatePassword',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'clientCertificatePassword',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'clientCertificatePassword',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'clientCertificatePassword',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'clientCertificatePassword',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordEndsWith(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'clientCertificatePassword',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'clientCertificatePassword',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordMatches(
+    String pattern, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'clientCertificatePassword',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'clientCertificatePassword',
+          value: '',
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePasswordIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          property: r'clientCertificatePassword',
+          value: '',
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'clientCertificatePath'),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'clientCertificatePath'),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathEqualTo(String? value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'clientCertificatePath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'clientCertificatePath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'clientCertificatePath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'clientCertificatePath',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathStartsWith(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'clientCertificatePath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathEndsWith(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'clientCertificatePath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'clientCertificatePath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'clientCertificatePath',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'clientCertificatePath', value: ''),
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterFilterCondition>
+  clientCertificatePathIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          property: r'clientCertificatePath',
+          value: '',
+        ),
       );
     });
   }
@@ -4752,6 +5301,48 @@ extension FinampUserQuerySortBy
     });
   }
 
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  sortByClientCertificateName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificateName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  sortByClientCertificateNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificateName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  sortByClientCertificatePassword() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificatePassword', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  sortByClientCertificatePasswordDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificatePassword', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  sortByClientCertificatePath() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificatePath', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  sortByClientCertificatePathDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificatePath', Sort.desc);
+    });
+  }
+
   QueryBuilder<FinampUser, FinampUser, QAfterSortBy> sortByIsarCurrentViewId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'currentViewId', Sort.asc);
@@ -4875,6 +5466,48 @@ extension FinampUserQuerySortThenBy
   QueryBuilder<FinampUser, FinampUser, QAfterSortBy> thenByPublicAddressDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'baseUrl', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  thenByClientCertificateName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificateName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  thenByClientCertificateNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificateName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  thenByClientCertificatePassword() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificatePassword', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  thenByClientCertificatePasswordDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificatePassword', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  thenByClientCertificatePath() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificatePath', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QAfterSortBy>
+  thenByClientCertificatePathDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'clientCertificatePath', Sort.desc);
     });
   }
 
@@ -5004,6 +5637,36 @@ extension FinampUserQueryWhereDistinct
     });
   }
 
+  QueryBuilder<FinampUser, FinampUser, QDistinct>
+  distinctByClientCertificateName({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(
+        r'clientCertificateName',
+        caseSensitive: caseSensitive,
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QDistinct>
+  distinctByClientCertificatePassword({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(
+        r'clientCertificatePassword',
+        caseSensitive: caseSensitive,
+      );
+    });
+  }
+
+  QueryBuilder<FinampUser, FinampUser, QDistinct>
+  distinctByClientCertificatePath({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(
+        r'clientCertificatePath',
+        caseSensitive: caseSensitive,
+      );
+    });
+  }
+
   QueryBuilder<FinampUser, FinampUser, QDistinct> distinctByIsarCurrentViewId({
     bool caseSensitive = true,
   }) {
@@ -5084,6 +5747,27 @@ extension FinampUserQueryProperty
   QueryBuilder<FinampUser, String, QQueryOperations> publicAddressProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'baseUrl');
+    });
+  }
+
+  QueryBuilder<FinampUser, String?, QQueryOperations>
+  clientCertificateNameProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'clientCertificateName');
+    });
+  }
+
+  QueryBuilder<FinampUser, String?, QQueryOperations>
+  clientCertificatePasswordProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'clientCertificatePassword');
+    });
+  }
+
+  QueryBuilder<FinampUser, String?, QQueryOperations>
+  clientCertificatePathProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'clientCertificatePath');
     });
   }
 

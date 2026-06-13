@@ -28,6 +28,7 @@ import 'package:rxdart/rxdart.dart';
 import 'android_auto_helper.dart';
 import 'finamp_settings_helper.dart';
 import 'ios_helpers.dart';
+import 'local_audio_proxy.dart';
 import 'metadata_provider.dart';
 
 enum FadeDirection { fadeIn, fadeOut, none }
@@ -136,6 +137,7 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler with SeekHandler, Queue
   late final List<AndroidAudioEffect> _androidAudioEffects;
   late final List<DarwinAudioEffect> _iosAudioEffects;
   late final AndroidLoudnessEnhancer? _loudnessEnhancerEffect;
+  final LocalAudioProxy _audioProxy = LocalAudioProxy();
 
   final _audioServiceBackgroundTaskLogger = Logger("MusicPlayerBackgroundTask");
   final _volumeNormalizationLogger = Logger("VolumeNormalization");
@@ -308,6 +310,9 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler with SeekHandler, Queue
       JustAudioMediaKit.bufferSize = FinampSettingsHelper.finampSettings.bufferSizeMegabytes * 1024 * 1024;
       JustAudioMediaKit.ensureInitialized(linux: true, windows: true, macOS: false, iOS: false, android: false);
     }
+
+    _audioProxy.start();
+    _audioServiceBackgroundTaskLogger.info("Audio proxy started on port ${_audioProxy.port}");
 
     _androidAudioEffects = [];
     _iosAudioEffects = [];
@@ -1399,7 +1404,7 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler with SeekHandler, Queue
       builtPath.addAll(["Items", mediaItem.extras!["itemJson"]["Id"] as String, "File"]);
     }
 
-    return Uri(
+    final originalUri = Uri(
       host: parsedBaseUrl.host,
       port: parsedBaseUrl.port,
       scheme: parsedBaseUrl.scheme,
@@ -1407,6 +1412,18 @@ class MusicPlayerBackgroundTask extends BaseAudioHandler with SeekHandler, Queue
       pathSegments: builtPath,
       queryParameters: queryParameters,
     );
+
+    if (_audioProxy.isRunning) {
+      return Uri(
+        scheme: "http",
+        host: "127.0.0.1",
+        port: _audioProxy.port,
+        path: "/proxy",
+        queryParameters: {"url": originalUri.toString()},
+      );
+    }
+
+    return originalUri;
   }
 
   @override

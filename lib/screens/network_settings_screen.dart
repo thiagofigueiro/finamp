@@ -2,6 +2,7 @@ import 'package:finamp/components/Buttons/cta_medium.dart';
 import 'package:finamp/components/Buttons/simple_button.dart';
 import 'package:finamp/components/NetworkSettingsScreen/active_network_display.dart';
 import 'package:finamp/components/NetworkSettingsScreen/auto_offline_selector.dart';
+import 'package:finamp/components/NetworkSettingsScreen/client_certificate_selector.dart';
 import 'package:finamp/components/NetworkSettingsScreen/prefer_local_network_address_selector.dart';
 import 'package:finamp/components/NetworkSettingsScreen/prefer_local_network_selector.dart';
 import 'package:finamp/components/NetworkSettingsScreen/public_address_selector.dart';
@@ -44,6 +45,8 @@ class _NetworkSettingsScreenState extends State<NetworkSettingsScreen> {
           PublicAddressSelector(),
           LocalNetworkSelector(),
           LocalNetworkAddressSelector(key: localNetworkAddressKey),
+          Divider(),
+          ClientCertificateSelector(),
           SizedBox(height: 32.0),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

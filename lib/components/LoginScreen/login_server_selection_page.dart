@@ -1,12 +1,18 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:finamp/components/Buttons/simple_button.dart';
 import 'package:finamp/components/finamp_icon.dart';
 import 'package:finamp/models/jellyfin_models.dart';
 import 'package:finamp/services/jellyfin_api_helper.dart';
+import 'package:finamp/services/pre_login_certificate.dart';
 import 'package:flutter/material.dart';
 import 'package:finamp/l10n/app_localizations.dart';
 import 'package:flutter_tabler_icons/flutter_tabler_icons.dart';
 import 'package:get_it/get_it.dart';
 import 'package:logging/logging.dart';
+import 'package:path/path.dart' as path_helper;
+import 'package:path_provider/path_provider.dart';
 
 import 'login_flow.dart';
 
@@ -96,6 +102,7 @@ class _LoginServerSelectionPageState extends State<LoginServerSelectionPage> {
                 ),
               ),
               _buildServerUrlInput(context),
+              _buildClientCertTile(context),
               ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 95.0),
                 child: widget.serverState.baseUrlToTest != null && widget.serverState.manualServer == null
@@ -113,22 +120,30 @@ class _LoginServerSelectionPageState extends State<LoginServerSelectionPage> {
                           ],
                         ),
                       )
-                    : Visibility(
-                        visible: widget.serverState.manualServer != null,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 12.0),
-                          child: JellyfinServerSelectionWidget(
-                            baseUrl: widget.serverState.baseUrl,
-                            serverInfo: widget.serverState.manualServer,
-                            onPressed: () {
-                              widget.onServerSelected?.call(
-                                widget.serverState.manualServer!,
-                                widget.serverState.baseUrl!,
-                              );
-                            },
-                          ),
-                        ),
-                      ),
+                    : (widget.serverState.manualServer != null
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 12.0),
+                            child: JellyfinServerSelectionWidget(
+                              baseUrl: widget.serverState.baseUrl,
+                              serverInfo: widget.serverState.manualServer,
+                              onPressed: () {
+                                widget.onServerSelected?.call(
+                                  widget.serverState.manualServer!,
+                                  widget.serverState.baseUrl!,
+                                );
+                              },
+                            ),
+                          )
+                        : (widget.serverState.connectionError != null
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 12.0),
+                                child: Text(
+                                  widget.serverState.connectionError!,
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error),
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            : const SizedBox.shrink())),
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 20.0, bottom: 16.0),
@@ -195,6 +210,115 @@ class _LoginServerSelectionPageState extends State<LoginServerSelectionPage> {
     );
   }
 
+  Future<void> _importPreLoginCertificate() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ["p12", "pfx"],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    final bytes = file.bytes;
+    final fileName = file.name;
+
+    if (bytes == null || bytes.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to read certificate file")),
+      );
+      return;
+    }
+
+    final password = await _promptForPassword();
+    if (password == null || !context.mounted) return;
+
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final certDir = Directory(path_helper.join(dir.path, "certificates"));
+      if (!certDir.existsSync()) {
+        certDir.createSync(recursive: true);
+      }
+
+      final destPath = path_helper.join(certDir.path, "pre_login.p12");
+      await File(destPath).writeAsBytes(bytes);
+
+      PreLoginCertificate.path = destPath;
+      PreLoginCertificate.password = password;
+      PreLoginCertificate.name = fileName;
+      jellyfinApiHelper.refreshJellyfinApi();
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Certificate imported")),
+      );
+
+      setState(() {});
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error importing certificate: $e")),
+      );
+    }
+  }
+
+  Future<String?> _promptForPassword() {
+    final controller = TextEditingController();
+    return showDialog<String?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Certificate Password"),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: "Password",
+            hintText: "Enter the .p12 file password",
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(null),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text("Import"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _removePreLoginCertificate() {
+    PreLoginCertificate.clear();
+    setState(() {});
+  }
+
+  Widget _buildClientCertTile(BuildContext context) {
+    final hasCert = PreLoginCertificate.isConfigured;
+    final certName = PreLoginCertificate.name;
+
+    return ListTile(
+      leading: Icon(hasCert ? Icons.lock : Icons.lock_open),
+      title: const Text("Client Certificate"),
+      subtitle: Text(
+        hasCert ? (certName ?? "Certificate configured") : "No client certificate configured",
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      trailing: hasCert
+          ? IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _removePreLoginCertificate,
+              tooltip: "Remove certificate",
+            )
+          : null,
+      onTap: hasCert ? null : _importPreLoginCertificate,
+    );
+  }
+
   Form _buildServerUrlInput(BuildContext context) {
     // This variable is for handling shifting focus when the user presses submit.
     // https://stackoverflow.com/questions/52150677/how-to-shift-focus-to-next-textfield-in-flutter
@@ -248,6 +372,7 @@ class _LoginServerSelectionPageState extends State<LoginServerSelectionPage> {
               onEditingComplete: () => node.nextFocus(),
               onChanged: (value) async {
                 widget.serverState.manualServer = null;
+                widget.serverState.connectionError = null;
                 widget.serverState.baseUrl = value;
                 if (formKey.currentState?.validate() == true) {
                   widget.serverState.onBaseUrlChanged(value);

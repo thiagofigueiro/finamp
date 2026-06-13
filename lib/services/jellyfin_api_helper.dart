@@ -14,17 +14,20 @@ import 'package:get_it/get_it.dart';
 import 'package:http/io_client.dart' as http;
 import 'package:isar/isar.dart';
 import 'package:logging/logging.dart';
+import 'package:path/path.dart' as path_helper;
 import 'package:path_provider/path_provider.dart';
 import '../models/finamp_models.dart';
 import '../models/jellyfin_models.dart';
+import 'documents_path.dart';
 import 'downloads_service.dart';
 import 'downloads_service_backend.dart';
 import 'finamp_settings_helper.dart';
 import 'finamp_user_helper.dart';
 import 'jellyfin_api.dart' as jellyfin_api;
+import 'pre_login_certificate.dart';
 
 class JellyfinApiHelper {
-  final jellyfinApi = jellyfin_api.JellyfinApi.create(true);
+  jellyfin_api.JellyfinApi jellyfinApi = jellyfin_api.JellyfinApi.create(true);
   final _jellyfinApiHelperLogger = Logger("JellyfinApiHelper");
 
   // Stores the ids of the artists that the user selected to mix
@@ -53,6 +56,45 @@ class JellyfinApiHelper {
 
   SendPort? _workerIsolatePort;
 
+  /// Recreate the [jellyfinApi] instance so it picks up a new [SecurityContext]
+  /// after a client certificate has been configured during or after login.
+  /// Also signals the background isolate to recreate its own API copy.
+  void refreshJellyfinApi() {
+    jellyfinApi = jellyfin_api.JellyfinApi.create(true);
+    _workerIsolatePort?.send(null);
+  }
+
+  /// If a pre-login certificate was configured (via the login screen),
+  /// copy it to the given user's certificate path and clear the pre-login
+  /// holder so future requests use the per-user cert.
+  Future<void> _migratePreLoginCertificate(FinampUser user) async {
+    if (!PreLoginCertificate.isConfigured) return;
+
+    final dir = await getApplicationDocumentsDirectory();
+    final certDir = Directory(path_helper.join(dir.path, "certificates"));
+    if (!certDir.existsSync()) {
+      certDir.createSync(recursive: true);
+    }
+
+    final oldPath = PreLoginCertificate.path;
+    final destPath = path_helper.join(certDir.path, "${user.id}.p12");
+
+    if (oldPath != null) {
+      final srcFile = File(oldPath);
+      if (srcFile.existsSync()) {
+        await srcFile.copy(destPath);
+      }
+    }
+
+    user.update(
+      newClientCertificatePath: destPath,
+      newClientCertificatePassword: PreLoginCertificate.password,
+      newClientCertificateName: PreLoginCertificate.name,
+    );
+
+    refreshJellyfinApi();
+  }
+
   /// This should only be run in a worker isolate
   /// Sets up singletons and listens for work.
   static Future<void> _processRequestsBackground((SendPort, RootIsolateToken) input) async {
@@ -67,6 +109,7 @@ class JellyfinApiHelper {
     final dir = (Platform.isAndroid || Platform.isIOS)
         ? await getApplicationDocumentsDirectory()
         : await getApplicationSupportDirectory();
+    cachedDocumentsPath = dir.path;
     final isar = await Isar.open(
       [DownloadItemSchema, IsarTaskDataSchema, FinampUserSchema],
       directory: dir.path,
@@ -80,7 +123,14 @@ class JellyfinApiHelper {
     await GetIt.instance<FinampUserHelper>().setAuthHeader();
     jellyfin_api.JellyfinApi backgroundApi = jellyfin_api.JellyfinApi.create(false);
     await for (var request in requestPort) {
+      if (request == null) {
+        backgroundApi = jellyfin_api.JellyfinApi.create(false);
+        continue;
+      }
       var (func, outputPort) = request as (Future<dynamic> Function(jellyfin_api.JellyfinApi), SendPort);
+      // Recreate the API before every request so it picks up cert
+      // changes from Isar (e.g. after login on the main thread).
+      backgroundApi = jellyfin_api.JellyfinApi.create(false);
       try {
         var output = await func(backgroundApi);
         outputPort.send(output);
@@ -493,9 +543,15 @@ class JellyfinApiHelper {
   /// Fetch the public server info from the server.
   /// Can be used to check if the server is online / the URL is correct.
   Future<PublicSystemInfoResult?> loadServerPublicInfo({Duration? timeout}) async {
-    // Some users won't have a password.
     if (_finampUserHelper.currentUser?.baseURL == null && baseUrlTemp == null) {
       return null;
+    }
+
+    // During the login flow there is no user yet. If a pre-login client
+    // certificate is configured, make a direct HTTP request with the cert
+    // instead of going through the pre-created (and cert-less) jellyfinApi.
+    if (_finampUserHelper.currentUser == null && PreLoginCertificate.isConfigured) {
+      return _loadPublicInfoDirect(baseUrlTemp!, timeout: timeout);
     }
 
     var request = jellyfinApi.getPublicServerInfo();
@@ -514,6 +570,33 @@ class JellyfinApiHelper {
     return publicSystemInfoResult;
   }
 
+  /// Makes a raw HTTP GET to /System/Info/Public using a client certificate.
+  /// Used during login when there is no user yet.
+  Future<PublicSystemInfoResult?> _loadPublicInfoDirect(Uri baseUrl, {Duration? timeout}) async {
+    final requestUrl = baseUrl.replace(
+      pathSegments: baseUrl.pathSegments.followedBy(["System", "Info", "Public"]),
+    );
+    final hasCert = PreLoginCertificate.isConfigured;
+    _jellyfinApiHelperLogger.info("_loadPublicInfoDirect: hasCert=$hasCert url=$requestUrl");
+    final secCtx = PreLoginCertificate.createSecurityContext();
+    final client = http.IOClient(HttpClient(context: secCtx)
+      ..connectionTimeout = timeout ?? const Duration(seconds: 10));
+    try {
+      final response = await client.get(requestUrl);
+      _jellyfinApiHelperLogger.info("_loadPublicInfoDirect: status=${response.statusCode}");
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return PublicSystemInfoResult.fromJson(body);
+      }
+      return Future.error(response);
+    } catch (e) {
+      _jellyfinApiHelperLogger.severe("_loadPublicInfoDirect failed: $e");
+      rethrow;
+    } finally {
+      client.close();
+    }
+  }
+
   /// Fetch the public server info from a given URL.
   /// Can be used to check if the server is online / the URL is correct.
   /// Since we're potentially looking multiple servers, while the user is entering another base URL, we use a custom http client for this request.
@@ -521,7 +604,8 @@ class JellyfinApiHelper {
     final requestUrl = customServerUrl.replace(
       pathSegments: customServerUrl.pathSegments.followedBy(["System", "Info", "Public"]),
     );
-    final httpClient = ChopperClient().httpClient; // http? where we're going, we don't need http
+    final secCtx = PreLoginCertificate.createSecurityContext();
+    final httpClient = http.IOClient(HttpClient(context: secCtx));
     final response = await httpClient.get(requestUrl);
     final responseJson = jsonDecode(response.body) as Map<String, dynamic>;
 
@@ -628,6 +712,7 @@ class JellyfinApiHelper {
     );
 
     await _finampUserHelper.saveUser(newUser);
+    await _migratePreLoginCertificate(newUser);
     baseUrlTemp =
         null; // Clear the temporary base URL after authentication, since this has priority over the regular URL
   }
@@ -1031,9 +1116,10 @@ class JellyfinApiHelper {
   }
 
   Future<bool> _pingSpecificServer(String url) async {
+    final secCtx = jellyfin_api.createClientCertSecurityContext() ?? PreLoginCertificate.createSecurityContext();
     final client = ChopperClient(
       baseUrl: Uri.tryParse(url),
-      client: http.IOClient(HttpClient()..connectionTimeout = const Duration(seconds: 3)),
+      client: http.IOClient(HttpClient(context: secCtx)..connectionTimeout = const Duration(seconds: 3)),
       interceptors: [jellyfin_api.JellyfinSpecificInterceptor(url), HttpAggregateLoggingInterceptor()],
       converter: JsonConverter(),
     );

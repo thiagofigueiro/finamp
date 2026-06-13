@@ -80,6 +80,15 @@ class FinampUser {
   @HiveField(9, defaultValue: DefaultSettings.preferLocalNetwork)
   bool preferLocalNetwork;
 
+  @HiveField(10)
+  String? clientCertificatePath;
+
+  @HiveField(11)
+  String? clientCertificatePassword;
+
+  @HiveField(12)
+  String? clientCertificateName;
+
   // We only need 1 user, the current user
   final Id isarId = 0;
   String get isarViews => jsonEncode(views);
@@ -90,11 +99,14 @@ class FinampUser {
   @ignore
   BaseItemDto? get currentView => views[currentViewId];
 
-  void update({bool? newIsLocal, String? newLocalAddress, String? newPublicAddress, bool? newPreferLocalNetwork}) {
+  void update({bool? newIsLocal, String? newLocalAddress, String? newPublicAddress, bool? newPreferLocalNetwork, String? newClientCertificatePath, String? newClientCertificatePassword, String? newClientCertificateName}) {
     isLocal = newIsLocal ?? isLocal;
     localAddress = newLocalAddress ?? localAddress;
     publicAddress = newPublicAddress ?? publicAddress;
     preferLocalNetwork = newPreferLocalNetwork ?? preferLocalNetwork;
+    clientCertificatePath = newClientCertificatePath ?? clientCertificatePath;
+    clientCertificatePassword = newClientCertificatePassword ?? clientCertificatePassword;
+    clientCertificateName = newClientCertificateName ?? clientCertificateName;
     GetIt.instance<FinampUserHelper>().saveUser(this);
   }
 }
