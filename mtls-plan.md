@@ -7,6 +7,7 @@ Enable Finamp to connect to Jellyfin servers that require mutual TLS (mTLS) clie
 - **Test file**: `finamp.p12` (password: `123`) at project root
 - **Test servers**: `https://j.terraaustralis.mywire.org/` or `https://j2.terraaustralis.mywire.org/`
 - **Simulator**: iPhone 16 (Xcode 16.4, iOS 18.5 SDK)
+- **Physical device**: iPhone 13 mini "Aussiebro" (iOS 26.5) via USB — Xcode 16.4 successfully deploys to iOS 26.5
 
 ## Approach
 Pure Dart via `SecurityContext` + PKCS12 file on disk. Since native players (AVPlayer, libmpv) and `background_downloader` (URLSession) bypass Dart's `HttpClient`, a local HTTP proxy is used to inject mTLS.
@@ -34,11 +35,11 @@ Pure Dart via `SecurityContext` + PKCS12 file on disk. Since native players (AVP
 - [x] 11. **WebSocket fix** — `IOWebSocketChannel.connect(wsUrl, customClient: HttpClient(context: secCtx))` in `playon_service.dart`
 - [x] 12. **`cachedDocumentsPath` global** — set at startup in both main and background isolates for sync cert path derivation
 - [x] 13. **Commit `ceadaf0c`** on `redesign` branch with all changes above
-- [ ] 14. **Manual test**: full login → import cert → restart → API/audio/downloads/WebSocket all work
+- [x] 14. **Manual test**: full login → import cert → restart → API/audio/downloads/WebSocket all work — tested on physical iPhone 13 mini (iOS 26.5)
 - [ ] 15. **Debug auto-import** (`kDebugMode` auto-detects .p12 in `{documentsDir}/certificates/`) — works when a user is logged in
 - [x] 16. **Diagnose and fix app freeze** when switching tracks while music plays
 - [x] 17. **Route images through proxy** to fix TLS errors on album art
-- [ ] 18. **Investigate (-11849) Operation Stopped** — pre-existing libmpv error when switching albums while a song is playing; likely unrelated to mTLS
+- [x] 18. **Investigate (-11849) Operation Stopped** — pre-existing libmpv error when switching albums while a song is playing; confirmed not caused by mTLS changes
 
 ## Known Limitations
 - **Chicken-and-egg**: Can't configure a certificate before logging in. If the server requires mTLS for all endpoints (including login), the user won't be able to reach the login screen to configure the cert. **Resolved**: Pre-import cert on the login screen before connecting to the server.
@@ -90,8 +91,23 @@ Pure Dart via `SecurityContext` + PKCS12 file on disk. Since native players (AVP
 - **Symptoms**: After playing a song and then navigating to another album and tapping a track, the player shows `(-11849) Operation Stopped` error. The queue is replaced and proxy requests succeed, but the native player fails to start.
 - **Timeline**: Queue replaced → player pauses → proxy serves new audio (Done 206 in ~60-80ms) → media-kit returns `(-11849) Operation Stopped` → app shows error snackbar.
 - **Root cause**: Pre-existing media-kit/libmpv issue — the native player's pipeline is still transitioning when `play()` is called after a queue replacement. Not caused by mTLS changes.
+- **Upstream research**:
+  - `media-kit/media-kit` issue **#1115** (closed duplicate of **#964**): *"Deactivating an audio session that has running I/O"* — when switching tracks on iOS, the old player's audio session is deactivated while I/O is still running, triggering `AVErrorOperationStopped (-11849)`. Issue #964 is still open.
+  - `Pato05/just_audio_media_kit`: No relevant issues or PRs. Only 4 open issues, none about audio sessions or freezes.
+  - `media-kit/media-kit` is now in **[Limited Maintenance](https://github.com/media-kit/media-kit/issues/1337)** (issue #1337).
+  - Qiita article (2021) suggests `AudioPlayer.clearAssetCache()` to fix cache inconsistency causing this error in vanilla `just_audio`.
 - **Likelihood**: Previously masked because audio failed silently with TLS errors when mTLS was required. Now that audio actually reaches the native player, this edge case surfaces.
-- **Status**: Not our bug to fix. May be resolved by adding a small delay between `pause()` and `play()` in the queue service, or by upstream `just_audio_media_kit` improvements.
+- **Status**: No upstream fix available. Workaround is app restart. Could potentially be mitigated by adding a small delay between `pause()` and `play()` in the queue service, but root cause is in media-kit/libmpv's iOS audio session management.
+
+### Round 7: Physical device deployment (iPhone 13 mini on iOS 26.5)
+- **Symptoms**: `flutter run` fails with signing errors, CarPlay/Siri capabilities not supported by free personal team, app crashes when launched by tapping icon (debug mode restriction).
+- **Fixes applied**:
+  1. Changed `DEVELOPMENT_TEAM` from `PFNS8PTRM7` (original team) to `MR74D9LZ3H` (user's personal team) in `ios/Runner.xcodeproj/project.pbxproj` (3 occurrences).
+  2. Changed `PRODUCT_BUNDLE_IDENTIFIER` from `com.unicornsonlsd.finamp-ios` to `com.thiagocsf.finamp-ios` (3 occurrences).
+  3. Removed Siri entitlement (`com.apple.developer.siri`) from `Runner.entitlements`.
+  4. Removed CarPlay audio entitlement (`com.apple.developer.carplay-audio`) from `Runner.entitlements`.
+- **Result**: App builds, deploys, and runs successfully on iPhone 13 mini with iOS 26.5. All mTLS flows confirmed working: API calls, audio streaming, image loading, WebSocket. The immediate crash when tapping the icon is expected — debug-mode Flutter apps cannot be launched from the home screen on iOS 14+. Use `flutter run` to launch.
+- **Status**: Working. These changes are device-specific and should be kept local (not committed).
 
 ## Relevant Files
 | File | Change |
@@ -119,6 +135,5 @@ Pure Dart via `SecurityContext` + PKCS12 file on disk. Since native players (AVP
 - Proxy on main isolate may cause UI jank or freezes during high-throughput streaming
 
 ## Next Steps
-1. **Fix freeze**: Try reusing a single `HttpClient` instance in `LocalAudioProxy` (connection reuse). If unsuccessful, move proxy to a background isolate.
-2. **Full manual test**: Login → import cert → restart → verify API, audio playback, downloads, and WebSocket all work without errors.
-3. **Verify auto-import**: `kDebugMode` should auto-detect `.p12` in `{documentsDir}/certificates/` when a user is logged in.
+1. **Verify auto-import**: `kDebugMode` should auto-detect `.p12` in `{documentsDir}/certificates/` when a user is logged in.
+2. **Restore iOS capabilities**: If deploying with a paid Apple Developer account, restore CarPlay and Siri entitlements in `Runner.entitlements` and revert `DEVELOPMENT_TEAM`/`PRODUCT_BUNDLE_IDENTIFIER` to original values.
