@@ -565,39 +565,6 @@ Future<void> _setupFinampUserHelper() async {
     FinampSetters.setHasCompletedIsarUserMigration(true);
   }
   await GetIt.instance<FinampUserHelper>().setAuthHeader();
-  // In debug mode, auto-import a .p12 file from the certificates directory
-  // if no certificate is configured yet. This is for development/testing.
-  if (kDebugMode) {
-    unawaited(_maybeImportTestCertificate());
-  }
-}
-
-/// Auto-imports a .p12 certificate from {documentsDir}/certificates/ in debug
-/// mode so developers can test mTLS without the file picker UI each time.
-/// The certificate must use the password "123".
-Future<void> _maybeImportTestCertificate() async {
-  try {
-    final user = GetIt.instance<FinampUserHelper>().currentUser;
-    if (user == null) return;
-    if (user.clientCertificatePath != null) return;
-
-    final dir = await getApplicationDocumentsDirectory();
-    final certDir = Directory(path_helper.join(dir.path, "certificates"));
-    if (!certDir.existsSync()) return;
-
-    final p12Files = certDir.listSync().whereType<File>().where((f) => f.path.endsWith(".p12")).toList();
-    if (p12Files.isEmpty) return;
-
-    final testCert = p12Files.first;
-    user.update(
-      newClientCertificatePath: testCert.path,
-      newClientCertificatePassword: "123",
-      newClientCertificateName: testCert.path.split("/").last,
-    );
-    Logger("DebugCert").info("Auto-imported test certificate from ${testCert.path}");
-  } catch (e) {
-    Logger("DebugCert").warning("Failed to auto-import test certificate: $e");
-  }
 }
 
 class Finamp extends StatefulWidget {
